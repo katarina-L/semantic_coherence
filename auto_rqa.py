@@ -216,33 +216,6 @@ def get_laminarity(cosine_sim_matrix, n_words):
                         n_on_vert += 1
     return(n_on_vert)
 
-def get_linemax_OLD(cosine_sim_matrix, n_words):
-    #input: the cosine similarity matrix
-    #output: the length of the longest diagonal line
-    longest_line = 0
-    current_line_length = 0
-    for x_index in range(n_words):
-        for y_index in range(n_words):
-            if x_index != y_index: #main diagonal should not be counted
-                cosine_similarity = cosine_sim_matrix[x_index, y_index]
-                if cosine_similarity > SIMILARITY_THRESHOLD:
-                    current_line_length = 1 #begin een nieuwe lijn
-                    on_diag_line = True
-                    while on_diag_line:
-                        x_next = x_index + current_line_length
-                        y_next = y_index + current_line_length
-                        if x_next < n_words and y_next < n_words: #check if not at a border
-                            one_ahead = cosine_sim_matrix[x_next, y_next] #if not, get the cosine similarity of the next point
-                            if one_ahead > SIMILARITY_THRESHOLD:
-                                current_line_length += 1
-                            else:
-                                on_diag_line = False
-                        else:
-                            on_diag_line = False
-            if current_line_length > longest_line:
-                longest_line = current_line_length
-    return(longest_line)
-
 def get_line_lengths(cosine_sim_matrix, n_words):
     #input: the cosine sim matrix and the amount of words
     #output:a dictionary with all line lengths as key and the amount of lines of
