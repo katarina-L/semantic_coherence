@@ -34,8 +34,8 @@ def preprocess_dream(raw_dream):
     #output: spacy.tokens.doc.Doc
     txt_as_string = raw_dream.read()
     txt_as_string = re.sub('-[A-Z]{3}-', '', txt_as_string)
-    title = re.search('QQQ([0-9])+\.', txt_as_string).group()
-    txt_as_string = re.sub(title, '', txt_as_string) #remove the title
+    #title = re.search('QQQ([0-9])+\.', txt_as_string).group()
+    #txt_as_string = re.sub(title, '', txt_as_string) #remove the title
     txt_as_string = re.sub(' (?=[^A-Za-z])', '', txt_as_string) #to remove weird spaces
     txt = nlp(txt_as_string)
     return(txt)
@@ -163,7 +163,7 @@ def get_recurrency(cosine_sim_matrix, n_words):
     n_recurrence_points = 0
     for x_index in range(n_words):
         for y_index in range(n_words):
-            if not x_index == y_index: #if we are on the diagonal line, do not count
+            if x_index != y_index: #if we are on the diagonal line, do not count
                 cosine_similarity = cosine_sim_matrix[x_index, y_index]
                 if cosine_similarity > SIMILARITY_THRESHOLD:
                     n_recurrence_points += 1
@@ -177,7 +177,7 @@ def get_determinism(cosine_sim_matrix, n_words):
     n_on_diag = 0
     for x_index in range(n_words):
         for y_index in range(n_words):
-            if not x_index == y_index: #if we are on the main diagonal, do not count
+            if x_index != y_index: #if we are on the main diagonal, do not count
                 cosine_similarity = cosine_sim_matrix[x_index, y_index]
                 if cosine_similarity > SIMILARITY_THRESHOLD:
                     #check if recurrence point is on a diagonal line. Minimum line length = 2
@@ -216,14 +216,14 @@ def get_laminarity(cosine_sim_matrix, n_words):
                         n_on_vert += 1
     return(n_on_vert)
 
-def get_linemax(cosine_sim_matrix, n_words):
+def get_linemax_OLD(cosine_sim_matrix, n_words):
     #input: the cosine similarity matrix
     #output: the length of the longest diagonal line
     longest_line = 0
     current_line_length = 0
     for x_index in range(n_words):
         for y_index in range(n_words):
-            if not x_index == y_index: #main diagonal should not be counted
+            if x_index != y_index: #main diagonal should not be counted
                 cosine_similarity = cosine_sim_matrix[x_index, y_index]
                 if cosine_similarity > SIMILARITY_THRESHOLD:
                     current_line_length = 1 #begin een nieuwe lijn
@@ -242,6 +242,72 @@ def get_linemax(cosine_sim_matrix, n_words):
             if current_line_length > longest_line:
                 longest_line = current_line_length
     return(longest_line)
+
+def get_line_lengths(cosine_sim_matrix, n_words):
+    #input: the cosine sim matrix and the amount of words
+    #output:a dictionary with all line lengths as key and the amount of lines of
+    #       that length as value
+    points_in_lines = []    #list with all the coordinates of recurrent points
+                            #   already counted as lines
+    line_lengths = {}
+    for x_index in range(n_words):
+        for y_index in range(n_words):
+            coordinate = (x_index, y_index)
+            if (x_index != y_index) and (coordinate not in points_in_lines): #not counting the main diagonal; also, check if we did not already count this point in some line
+                cosine_similarity = cosine_sim_matrix[x_index, y_index]
+                if cosine_similarity > SIMILARITY_THRESHOLD:
+                    on_diag_line = True
+                    line_length = 1 #start counting a line
+                    while(on_diag_line):
+                        x_next = x_index + line_length
+                        y_next = y_index + line_length
+                        if x_next < n_words and y_next < n_words: #check if not at a border
+                            next_cosine_similarity = cosine_sim_matrix[x_next, y_next]
+                            if next_cosine_similarity > SIMILARITY_THRESHOLD:
+                                line_length += 1
+                                continue
+
+                        # so the rest of this block is only executed if we are not
+                        # at a border and the next point is not a recurrent point
+
+                        if line_length > 1: #only count lines, not just recurrent points
+                            if line_length in line_lengths: #count line_length in dictionary
+                                line_lengths[line_length] += 1
+                            else:
+                                line_lengths[line_length] = 1
+                        on_diag_line = False
+    return(line_lengths)
+
+def get_line_length_entropy(line_lengths, n_words):
+    #input:a dictionary with all line lengths as key and the amount of lines of
+    #       that length as value
+    #output: entropy
+    length_probs = {} #dictionary storing the line lengths (key) with their relative probability (value)
+    n_lines = 0
+    if len(line_lengths) > 0:
+        for line_length in line_lengths:
+            n_lines += line_lengths[line_length]
+        for line_length in line_lengths:
+            length_probability = line_lengths[line_length] / n_lines
+            length_probs[line_length] = length_probability
+
+        #now, get the shannon's entropy for the probability distribution
+        total_entropy = 0
+        for prob in length_probs:
+            prob_entropy = prob * np.log(prob)
+            total_entropy += prob_entropy
+        entropy = total_entropy/len(line_lengths)
+        return(entropy)
+    else:
+        return(0) #if we did not find any diagonal lines, return an entropy of zero
+
+def get_linemax(line_lengths):
+    #input: a dictionary with all line lengths as key and the amount of lines of
+    #       that length as value
+    #output:the longest key of that dictionary
+    all_lengths = list(line_lengths.keys())
+    linemax = max(all_lengths)
+    return(linemax)
 
 def get_rqa_measures(cosine_sim_matrix, filename):
     #input: the cosine similarity matrix
@@ -277,8 +343,13 @@ def get_rqa_measures(cosine_sim_matrix, filename):
         laminarity = 0
     measures['laminarity'] = laminarity
 
+    #entropy of the length of diagonal line segments
+    line_lengths = get_line_lengths(cosine_sim_matrix, n_words)
+    line_length_entropy = get_line_length_entropy(line_lengths, n_words)
+    measures['entropy'] = line_length_entropy
+
     #linemax is the length of the longest diagonal line
-    linemax = get_linemax(cosine_sim_matrix, n_words)
+    linemax = get_linemax(line_lengths)
     measures['linemax'] = linemax
 
     RQA_MEASURES[filename] = measures
@@ -291,7 +362,7 @@ def get_rqa_measures_and_plot(embedding_vector, filename):
 ###################################### PRINT ###################################
 
 def print_measures():
-    outputfile = open('rqa_measures_dreams.csv', mode='w')
+    outputfile = open('rqa_measures_dreams_VALIDATED.csv', mode='w')
     i = 0
     for filename in RQA_MEASURES.keys():
         if i == 0: #if we are at the first iteration, print the headers
@@ -300,7 +371,8 @@ def print_measures():
                 outputfile.write(',')
                 outputfile.write(measure)
             outputfile.write('\n')
-        dream_name = re.sub('\.tok\.txt', '', filename)
+        #dream_name = re.sub('\.tok\.txt', '', filename)
+        dream_name = filename
         outputfile.write(dream_name)
         for measure in RQA_MEASURES[filename].keys():
             outputfile.write(',')
@@ -313,7 +385,7 @@ def print_measures():
 
 ####################################### MAIN ###################################
 
-def main(wdir='/home/hp/Documenten/labrot I', input_data_path = '/home/hp/Documenten/labrot I/2015all'):
+def main(wdir='/home/hp/Documenten/labrot I', input_data_path = '/home/hp/Documenten/labrot I/dreams_validation'):
     #input_data_path is the path to the folder with the dreams (every dream is a separate .txt file)
     #wdir = '/home/hp/Documenten/labrot I'
     os.chdir(wdir) #make sure there is a map called 'plots' in your working directory!
