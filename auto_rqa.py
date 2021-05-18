@@ -266,7 +266,8 @@ def get_line_length_entropy(line_lengths, n_words):
 
         #now, get the shannon's entropy for the probability distribution
         total_entropy = 0
-        for prob in length_probs:
+        for length in length_probs:
+            prob = length_probs[length]
             prob_entropy = prob * np.log(prob)
             total_entropy += prob_entropy
         entropy = total_entropy/len(line_lengths)
