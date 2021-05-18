@@ -270,7 +270,7 @@ def get_line_length_entropy(line_lengths, n_words):
             prob = length_probs[length]
             prob_entropy = prob * np.log(prob)
             total_entropy += prob_entropy
-        entropy = total_entropy/len(line_lengths)
+        entropy = -1 * total_entropy
         return(entropy)
     else:
         return(0) #if we did not find any diagonal lines, return an entropy of zero
